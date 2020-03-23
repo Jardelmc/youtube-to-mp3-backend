@@ -1,10 +1,11 @@
 import { Router } from 'express';
-// import multer from 'multer';
+
+import ProccessUrl from './app/controllers/ProccessUrl';
 
 const routes = new Router();
 
-routes.get('/', async (req, res) => {
-  return res.status(200).json();
-});
+routes.post('/download', ProccessUrl.requestNewDownload);
+routes.post('/downloadMany', ProccessUrl.requestNewManyDownload);
+routes.post('/getInfo', ProccessUrl.getVideoInfo);
 
 export default routes;
