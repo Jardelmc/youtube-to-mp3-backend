@@ -1,5 +1,5 @@
+/* eslint-disable func-names */
 /* eslint-disable no-constant-condition */
-/* eslint-disable no-console */
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-loop-func */
 import ytdl from 'ytdl-core';
