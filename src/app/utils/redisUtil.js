@@ -1,12 +1,9 @@
+/* eslint-disable import/prefer-default-export */
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-console */
 import redis from 'redis';
 
-const client = redis.createClient();
-
-client.on('error', err => {
-  console.log('Erro ao iniciar Redis ', err);
-});
+import client from '../../lib/redis';
 
 export async function setProccessHash(hash, path) {
   try {
@@ -16,10 +13,4 @@ export async function setProccessHash(hash, path) {
   } catch (error) {
     return false;
   }
-}
-
-export async function getProccessHash(hash) {
-  const info = await client.get(hash, (err, result) => {
-    return result;
-  });
 }

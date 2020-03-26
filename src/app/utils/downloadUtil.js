@@ -1,11 +1,19 @@
+/* eslint-disable no-restricted-syntax */
+/* eslint-disable no-await-in-loop */
+/* eslint-disable no-undef */
+/* eslint-disable no-loop-func */
+/* eslint-disable no-constant-condition */
 /* eslint-disable no-console */
 /* eslint-disable consistent-return */
 import shelljs from 'shelljs';
 import path from 'path';
+import fs from 'fs';
 import randomstring from 'randomstring';
 import ytdl from 'ytdl-core';
 import filenamify from 'filenamify';
 import runCommand from '../../audios/_index';
+import { getFolderPath, sleep } from './functionsUtil';
+import { setProccessHash } from './redisUtil';
 
 const functions = {
   getRandomHash() {
@@ -59,14 +67,13 @@ const functions = {
   },
 };
 
-export async function getStartDownload(url) {
+export async function getStartDownload(url, hash) {
   url = `https://www.youtube.com/watch?v=${url}`;
-
-  const hash = functions.getRandomHash();
 
   let fileName = await functions.getName(url);
 
-  const dir = path.join(__dirname, '..', '..', 'audios', 'youtube', hash);
+  const dir = getFolderPath(hash);
+
   shelljs.mkdir('-p', dir);
 
   fileName = filenamify(fileName);
@@ -74,10 +81,8 @@ export async function getStartDownload(url) {
   if (fileName) {
     const commands = functions.getStringCommand(hash, url, fileName);
 
-    await runCommand(commands, (success, err) => {
+    runCommand(commands, (success, err) => {
       if (success) {
-        console.log('Script corrido');
-
         return 'Sucesso';
       }
 
@@ -89,24 +94,59 @@ export async function getStartDownload(url) {
       }
     });
 
+    const filePath = path.join(dir, `${fileName}.mp3`);
+
+    let files = null;
+
+    let count = 0;
+
+    let control = false;
+    while (true || count < 280) {
+      files = [];
+
+      fs.readdirSync(dir).forEach(file => {
+        files.push(file);
+      });
+
+      if (files.length === 2) {
+        files.forEach(element => {
+          if (element === 'finish') {
+            control = true;
+          }
+        });
+
+        if (control) {
+          await setProccessHash(hash, filePath);
+          console.log('Script corrido e salvo no redis');
+          break;
+        }
+      }
+
+      await sleep(2);
+      console.log('Aguardando conclusão do download');
+
+      count += 1;
+    }
+
+    if (!control) {
+      await setProccessHash(hash, 'erro');
+    }
+
     return hash;
   }
-  return ['Erro ao obter informações do vídeo'];
+  return 'Erro ao obter informações do vídeo';
 }
 
-export async function getStartManyDownload(arrayOfVideos) {
-  const hash = functions.getRandomHash();
-
-  const dir = path.join(__dirname, '..', '..', 'audios', 'youtube', hash);
-  shelljs.mkdir('-p', dir);
+export async function getStartManyDownload(arrayOfVideos, hash) {
+  const dir = getFolderPath(hash);
 
   if (arrayOfVideos && arrayOfVideos.length > 0) {
+    shelljs.mkdir('-p', dir);
+
     const commands = functions.getManyStrings(hash, arrayOfVideos);
 
-    await runCommand(commands, (success, err) => {
+    runCommand(commands, async (success, err) => {
       if (success) {
-        console.log('Script corrido');
-
         return 'Sucesso';
       }
 
@@ -118,7 +158,49 @@ export async function getStartManyDownload(arrayOfVideos) {
       }
     });
 
+    const filePath = path.join(dir, `musicas.zip`);
+
+    let files = null;
+
+    let count = 0;
+
+    let control = false;
+
+    while (true || count < 980) {
+      files = [];
+
+      fs.readdirSync(dir).forEach(file => {
+        files.push(file);
+      });
+
+      if (files.length >= 1) {
+        for (const readFile of files) {
+          if (readFile === 'finish') {
+            control = true;
+          }
+        }
+
+        if (control) {
+          setProccessHash(hash, filePath);
+          console.log('Script corrido e salvo no redis - zip');
+          break;
+        }
+
+        setProccessHash(`${hash}Temp`, files.length);
+      }
+
+      await sleep(2);
+      console.log('Aguardando conclusão do download - zip');
+
+      count += 1;
+    }
+
+    if (!control) {
+      console.log('Erro ao concluir arquivo zip');
+      await setProccessHash(hash, 'erro');
+    }
+
     return hash;
   }
-  return ['Erro ao obter informações do vídeo'];
+  return 'Erro ao obter informações do vídeo';
 }

@@ -1,12 +1,11 @@
+/* eslint-disable consistent-return */
 /* eslint-disable func-names */
 /* eslint-disable no-constant-condition */
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-loop-func */
 import ytdl from 'ytdl-core';
-import fs from 'fs';
-import path from 'path';
-
-import { sleep } from '../utils/functionsUtil';
+import randomstring from 'randomstring';
+import client from '../../lib/redis';
 
 import { getStartDownload, getStartManyDownload } from '../utils/downloadUtil';
 
@@ -67,43 +66,11 @@ class ProccessUrl {
       if (isUrlValid) {
         const videoId = ytdl.getVideoID(youtubeUrl);
 
-        const hash = await getStartDownload(videoId);
+        const hash = randomstring.generate(8);
 
-        const pathToYoutubeFolder = path.join(
-          __dirname,
-          '..',
-          '..',
-          'audios',
-          'youtube',
-          hash
-        );
+        getStartDownload(videoId, hash);
 
-        let fileReady = null;
-        let files = null;
-
-        let count = 0;
-
-        while (true || count > 180) {
-          files = [];
-
-          fs.readdirSync(pathToYoutubeFolder).forEach(file => {
-            files.push(file);
-          });
-
-          if (files.length === 2) {
-            fileReady = files.filter(x => x !== 'finish');
-            break;
-          }
-
-          await sleep(1);
-          console.log('Aguardando conclusão do download');
-
-          count += 1;
-        }
-
-        return res.download(
-          path.resolve(pathToYoutubeFolder, `${fileReady[0]}`)
-        );
+        return res.status(200).json({ hash });
       }
       return res.status(200).json({
         err: 'Não foi possível verificar a URL. Por favor, tente novamente',
@@ -120,51 +87,65 @@ class ProccessUrl {
       if (!relatedVideoInfo || relatedVideoInfo.length === 0) {
         return res.status(200).json({ err: 'Nenhum link recebido' });
       }
+      const hash = randomstring.generate(8);
 
-      const hash = await getStartManyDownload(relatedVideoInfo);
+      getStartManyDownload(relatedVideoInfo, hash);
 
-      const pathToYoutubeFolder = path.join(
-        __dirname,
-        '..',
-        '..',
-        'audios',
-        'youtube',
-        hash
-      );
-
-      let fileReady = null;
-      let files = null;
-
-      let count = 0;
-
-      while (true || count > 1000) {
-        files = [];
-
-        let control = null;
-
-        fs.readdirSync(pathToYoutubeFolder).forEach(file => {
-          files.push(file);
-
-          if (file === 'finish') {
-            control = true;
-          }
-        });
-
-        if (control) {
-          fileReady = files.filter(x => x === 'musicas.zip');
-          break;
-        }
-
-        await sleep(1);
-        console.log('Aguardando conclusão do download');
-
-        count += 1;
-      }
-
-      return res.download(path.resolve(pathToYoutubeFolder, `${fileReady[0]}`));
+      return res.status(200).json({ hash });
     } catch (error) {
       return res.status(200).json({ err: 'Erro ao processar solicitação' });
     }
+  }
+
+  async getFileStatus(req, res) {
+    const { hash } = req.body;
+
+    if (hash) {
+      client.get(hash, (err, result) => {
+        if (err) {
+          return res
+            .status(200)
+            .json({ err: 'Não foi possível processar sua solicitação' });
+        }
+
+        if (result && result === 'erro') {
+          return res
+            .status(200)
+            .json({ err: 'Não foi possível processar sua solicitação' });
+        }
+        // Se resultado veio como string e não é igual a erro
+        if (result) {
+          return res.status(200).json({ isReady: true });
+        }
+
+        if (!result) {
+          client.get(`${hash}Temp`, (errTemp, resultTemp) => {
+            if (resultTemp) {
+              return res
+                .status(200)
+                .json({ isReady: false, tempDownloaded: resultTemp });
+            }
+            return res.status(200).json({ isReady: false });
+          });
+        }
+      });
+    } else {
+      return res.status(200).json({});
+    }
+  }
+
+  async getFile(req, res) {
+    const { hash } = req.body;
+
+    client.get(hash, (err, result) => {
+      if (err) {
+        return res.status(200).json({ err: 'Erro ao baixar arquivo' });
+      }
+      if (result) {
+        return res.download(result);
+      }
+      return res.status(200).json({ err: 'Erro ao baixar arquivo' });
+    });
   }
 }
 
