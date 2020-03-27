@@ -26,7 +26,25 @@ class ProccessUrl {
           `https://www.youtube.com/watch?v=${videoId}`
         );
 
-        const { title, related_videos } = videoInfo;
+        const formatDuration = value => {
+          if (value) {
+            const numhours = Math.floor(((value % 31536000) % 86400) / 3600);
+            const numminutes = Math.floor(
+              (((value % 31536000) % 86400) % 3600) / 60
+            );
+            const numseconds = (((value % 31536000) % 86400) % 3600) % 60;
+
+            const formattedTime = `${numhours ? `${numhours}:` : ''}${
+              numminutes
+                ? `${numminutes < 10 ? `0${numminutes}` : numminutes}:`
+                : `${numhours ? '00:' : ''}`
+            }${numseconds < 10 ? `0${numseconds}` : numseconds}s`;
+
+            return formattedTime;
+          }
+        };
+
+        const { title, related_videos, length_seconds } = videoInfo;
 
         const thumbnailUrl =
           videoInfo.player_response.videoDetails.thumbnail.thumbnails[0].url;
@@ -37,13 +55,25 @@ class ProccessUrl {
           relatedVideoInfo = related_videos.map(x => {
             const relatedId = x.id;
             const relatedTitle = x.title;
+            const relatedDuration = formatDuration(x.length_seconds);
             const relatedThumbnail = x.video_thumbnail;
 
-            return { relatedId, relatedTitle, relatedThumbnail };
+            return {
+              relatedId,
+              relatedTitle,
+              relatedThumbnail,
+              relatedDuration,
+            };
           });
         }
 
-        const payload = { title, thumbnailUrl, videoId, relatedVideoInfo };
+        const payload = {
+          title,
+          thumbnailUrl,
+          videoId,
+          duration: formatDuration(length_seconds),
+          relatedVideoInfo,
+        };
 
         return res.status(200).json(payload);
       }
